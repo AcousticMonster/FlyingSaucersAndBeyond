@@ -35,8 +35,6 @@ library(xlsx)
 library(dplyr)
 library(reshape)
 
-NURFORCreports(c("201407","201408")) 
-
 ## Install the Function
 NURFORCreports <- function(YearMonth) {
 
@@ -47,7 +45,7 @@ NURFORCreports <- function(YearMonth) {
       y <- 1:length(YearMonth)
       
       
-      ## Loop through each inputed Month/Year, build the data, and output to a CSV file
+      ## Loop through each inputed Month/Year, build the data, and output to an Excel file (.xlsx)
       ## Output files will be located in your R working directory
       for(i in y) {
                       
@@ -61,8 +59,12 @@ NURFORCreports <- function(YearMonth) {
                       USANURFORCraw <- createSheet(wb = ufoWB, sheetName = "USA NURFORC Raw Data")
                       CanadaNURFORCraw <- createSheet(wb = ufoWB, sheetName = "Canada NURFORC Raw Data")
                       OtherNURFORCraw <- createSheet(wb = ufoWB, sheetName = "Other NURFORC Raw Data")
-                      USAShapeCount <- createSheet(wb = ufoWB, sheetName = "USA UFO Shapes Count")
                       
+                      USAShapeCount <- createSheet(wb = ufoWB, sheetName = "USA UFO Shapes Count")
+                      CanadaShapeCount <- createSheet(wb = ufoWB, sheetName = "Canada UFO Shapes Count")
+                      OtherShapeCount <- createSheet(wb = ufoWB, sheetName = "Other UFO Shapes Count")
+                      
+                      USALengthSeen <- createSheet(wb = ufoWB, sheetName = "USA UFO Shapes Seconds")
                       
                       
                       ## Create the unique url website link to scrape data from
@@ -92,48 +94,152 @@ NURFORCreports <- function(YearMonth) {
                       
                      
                       ## Subset the data into USA, Canada, and all other countries                      
-                      USASightings <- NURFORCtable[NURFORCtable$State %in% USA,]           
+                      USASightings <- NURFORCtable[NURFORCtable$State %in% USA,]                      
+                      USASightings$Reported <- as.Date(USASightings$Reported, format = "%m/%d/%y")
+                      
                       CanadaSightings <- NURFORCtable[NURFORCtable$State %in% Canada,]
+                      CanadaSightings$Reported <- as.Date(CanadaSightings$Reported, format = "%m/%d/%y")
+                                            
                       OtherSightings <- NURFORCtable[NURFORCtable$State == "" & NURFORCtable$City != "",]
-                     
-                      ##---------------------------------------------------------------------------------
+                      OtherSightings$Reported <- as.Date(OtherSightings$Reported, format = "%m/%d/%y")
+ 
                       
-                      ## USASightings Data Reports
                       
-                      ## Count Number of UFO Shapes grouped by States
+                      ###############################
+                      ## USASightings Data Reports ##
+                      ####################################################################################################
+                      
+                      ## Count Number of UFO Shapes grouped by States                      
+                      ## subset data to the three columns needed and rename the columns
                       USAShapesCount <- subset(USASightings[, c(1, 3, 4)])
                       names(USAShapesCount) <- c("Reported", "State", "Shape")
-                      
+                       
+                      ## Replace blank/Null shapes with "Unknown"
                       USAShapesCount$Shape <- replace(USAShapesCount$Shape, USAShapesCount$Shape =="", "Unknown")
-                      USAShapesCount$ReportedMonth <- format(as.POSIXct(USAShapesCount$Reported,format='%m/%d/%Y'),format='%m')
-                      USAShapesCount$ReportedYear <- format(as.POSIXct(USAShapesCount$Reported,format='%m/%d/%Y'),format='%Y')
-                      USAShapesCount$Reported <- format(as.POSIXct(USAShapesCount$Reported,format='%m/%d/%Y'),format='%b %Y')
-                                           
-                      ## Counts
+                      
+                      ## Reformat Reported datetime to a date format 
+                      USAShapesCount$Reported <- format(USAShapesCount$Reported,format='%b %Y')
+                      
+                      
+                      ## Group and Count the shapes by State
                       USAShapes <- USAShapesCount %>% group_by(Reported, State, Shape) %>% summarize(NumberSeen = length(Shape))
                       
-                      # pivot USAShapes dataframe data and replace generated NA with 0
+                      ## pivot USAShapes dataframe data and replace generated NA with 0
                       USAShapesFinalCount <- cast(USAShapes, Reported + State ~ Shape, value="NumberSeen") 
                       USAShapesFinalCount <- replace(USAShapesFinalCount, is.na(USAShapesFinalCount), "0")
                       
-                      ##---------------------------------------------------------------------------------
+                      
+                      ##----- Next Tab ------
                       
                       
-                      ## CanadaSightings Data Reports
+                      ## Calculate the number of seconds seen by State and Shape Types
+                      
+                      ## Reformat Reported datetime to a date format 
+                      USASightings$Reported <- format(USASightings$Reported,format='%b %Y')
+                      
+                      ## Split Duration to find seconds, minutes, hours, unusable types
+                      USASightings$DurationType <- ifelse(grepl("minute", USASightings$Duration), "minutes", 
+                                                ifelse(grepl("second", USASightings$Duration), "seconds", 
+                                                ifelse(grepl("hour", USASightings$Duration), "hours", "unusable")))
+                      
+                      ## find numeric value in the string for time calculation
+                      USASightings$DurationAmount <- suppressWarnings(as.numeric(gsub(" .*$|.*-|.*~|.*>", "", USASightings$Duration)))
+                      ## gsub filters 
+                      ## "-.*$" Finds number before the "-"
+                      ## ".*-" Finds number after the "-"
+                      ## " .*$" Finds before a space
+                      ## "|" is equal to an OR
+                      
+                      ## Replace the values NA with 0
+                      USASightings <- replace(USASightings, is.na(USASightings), "0")
+                      
+                      ## Convert (seconds, minutes, hours) to seconds
+                      USASightings$DurationSeconds <- ifelse(USASightings$DurationType == "seconds", as.numeric(USASightings$DurationAmount), 
+                                                ifelse(USASightings$DurationType == "minutes", as.numeric(USASightings$DurationAmount) * 60, 
+                                                ifelse(USASightings$DurationType == "hours", as.numeric(USASightings$DurationAmount) * 3600, 0)))
+                      
+                      
+                      ## Group the data and calculate the time summaries
+                      USASightingsTime <- USASightings %>% group_by(Reported, State, UFO_Shape) %>% 
+                              summarize(NumberSeen = length(UFO_Shape), 
+                                DurationInSeconds = sum(DurationSeconds), 
+                                DurationSecondsMin = min(DurationSeconds),
+                                DurationSecondsMax = max(DurationSeconds), 
+                                DurationSecondsMean = mean(DurationSeconds),
+                                DurationSecondsMedian = median(DurationSeconds),
+                                DurationSecondsStandardDeviation = sd(DurationSeconds))  
+                      
+                      ####################################################################################################
+
+                      
+                      
+                      ##################################                      
+                      ## CanadaSightings Data Reports ##
+                      ####################################################################################################
+                      
+                      ## Count Number of UFO Shapes grouped by Province                      
+                      ## subset data to the three columns needed and rename the columns
+                      CanadaShapesCount <- subset(CanadaSightings[, c(1, 3, 4)])
+                      names(CanadaShapesCount) <- c("Reported", "Province", "Shape")
+                      
+                      ## Replace blank/Null shapes with "Unknown"
+                      CanadaShapesCount$Shape <- replace(CanadaShapesCount$Shape, CanadaShapesCount$Shape =="", "Unknown")
+                      
+                      ## Reformat Reported datetime to a date format 
+                      CanadaShapesCount$Reported <- format(CanadaShapesCount$Reported,format='%b %Y')
+                      
+                      ## Group and Count the shapes by Province
+                      CanadaShapes <- CanadaShapesCount %>% group_by(Reported, Province, Shape) %>% summarize(NumberSeen = length(Shape))
+                      
+                      ## pivot CanadaShapes dataframe data and replace generated NA with 0
+                      CanadaShapesFinalCount <- cast(CanadaShapes, Reported + Province ~ Shape, value="NumberSeen") 
+                      CanadaShapesFinalCount <- replace(CanadaShapesFinalCount, is.na(CanadaShapesFinalCount), "0")
+                                            
+                      ####################################################################################################
+                      
+                     
+                      
+                      #################################
+                      ## OtherSightings Data Reports ##
+                      ####################################################################################################
+                      
+                      ## Count Number of UFO Shapes grouped by OtherLocation                     
+                      ## subset data to the three columns needed and rename the columns
+                      OtherShapesCount <- subset(OtherSightings[, c(1, 2, 4)])
+                      names(OtherShapesCount) <- c("Reported", "OtherLocation", "Shape")
+                      
+                      ## Replace blank/Null shapes with "Unknown"
+                      OtherShapesCount$Shape <- replace(OtherShapesCount$Shape, OtherShapesCount$Shape =="", "Unknown")
+                      
+                      ## Reformat Reported datetime to a date format 
+                      OtherShapesCount$Reported <- format(OtherShapesCount$Reported,format='%b %Y')
+                      
+                      
+                      ## Group and Count the shapes by OtherLocation
+                      OtherShapes <- OtherShapesCount %>% group_by(Reported, OtherLocation, Shape) %>% summarize(NumberSeen = length(Shape))
+                      
+                      ## pivot OtherShapes dataframe data and replace generated NA with 0
+                      OtherShapesFinalCount <- cast(OtherShapes, Reported + OtherLocation ~ Shape, value="NumberSeen") 
+                      OtherShapesFinalCount <- replace(OtherShapesFinalCount, is.na(OtherShapesFinalCount), "0")
+                      
+                      ####################################################################################################
                       
                       
                       
-                      ## OtherSightings Data Reports
+                      ## Output the Data to the Xcel Workbook
                       
-                      
-                      
-                      
-                      ## Add NURFORCtable data to the NURFORCraw worksheet
+                      ## Add NURFORCtable data to the Raw Data worksheets
                       addDataFrame(x=USASightings, sheet=USANURFORCraw, row.names=FALSE)
                       addDataFrame(x=CanadaSightings, sheet=CanadaNURFORCraw, row.names=FALSE)
                       addDataFrame(x=OtherSightings, sheet=OtherNURFORCraw, row.names=FALSE)
                       
+                      ## Add NURFORCtable data to the Shape Count worksheets
                       addDataFrame(x=USAShapesFinalCount, sheet=USAShapeCount, row.names=FALSE)
+                      addDataFrame(x=CanadaShapesFinalCount, sheet=CanadaShapeCount, row.names=FALSE)
+                      addDataFrame(x=OtherShapesFinalCount, sheet=OtherShapeCount, row.names=FALSE)
+                      
+                      ## Add NURFORCtable data to the Seconds Seen worksheets
+                      ##addDataFrame(x=USASightingsTime, sheet=USALengthSeen, row.names=FALSE) <<-- THROWS ERROR SO FIX THIS!!!
                       
                       
                       
@@ -141,11 +247,11 @@ NURFORCreports <- function(YearMonth) {
                       saveWorkbook(ufoWB, ufoWBname)
  
                 } ## End Loop
-
+head(USASightingsTime)
 }
 
 
-
-
+## Test the Function
+NURFORCreports(c("201407","201408")) 
 
 
