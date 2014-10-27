@@ -44,6 +44,8 @@ NURFORCreports <- function(YearMonth) {
       ## Determine the number of inputed Month/Year arguments
       y <- 1:length(YearMonth)
       
+      ## Create a list of workbook names (for final printed message)
+      WorkbookNames <- NULL
       
       ## Loop through each inputed Month/Year, build the data, and output to an Excel file (.xlsx)
       ## Output files will be located in your R working directory
@@ -65,6 +67,8 @@ NURFORCreports <- function(YearMonth) {
                       OtherShapeCount <- createSheet(wb = ufoWB, sheetName = "Other UFO Shapes Count")
                       
                       USALengthSeen <- createSheet(wb = ufoWB, sheetName = "USA UFO Shapes Seconds")
+                      CanadaLengthSeen <- createSheet(wb = ufoWB, sheetName = "Canada UFO Shapes Seconds")
+                      OtherLengthSeen <- createSheet(wb = ufoWB, sheetName = "Other UFO Shapes Seconds")
                       
                       
                       ## Create the unique url website link to scrape data from
@@ -162,12 +166,14 @@ NURFORCreports <- function(YearMonth) {
                       ## Group the data and calculate the time summaries
                       USASightingsTime <- USASightings %>% group_by(Reported, State, UFO_Shape) %>% 
                               summarize(NumberSeen = length(UFO_Shape), 
-                                DurationInSeconds = sum(DurationSeconds), 
-                                DurationSecondsMin = min(DurationSeconds),
-                                DurationSecondsMax = max(DurationSeconds), 
-                                DurationSecondsMean = mean(DurationSeconds),
-                                DurationSecondsMedian = median(DurationSeconds),
-                                DurationSecondsStandardDeviation = sd(DurationSeconds))  
+                                        DurationInSeconds = sum(DurationSeconds), 
+                                        DurationSecondsMin = min(DurationSeconds),
+                                        DurationSecondsMax = max(DurationSeconds), 
+                                        DurationSecondsMean = mean(DurationSeconds),
+                                        DurationSecondsMedian = median(DurationSeconds),
+                                        DurationSecondsStandardDeviation = sd(DurationSeconds)) 
+                      
+                      USASightingsTimeFinal <- as.data.frame(USASightingsTime)
                       
                       ####################################################################################################
 
@@ -195,6 +201,49 @@ NURFORCreports <- function(YearMonth) {
                       CanadaShapesFinalCount <- cast(CanadaShapes, Reported + Province ~ Shape, value="NumberSeen") 
                       CanadaShapesFinalCount <- replace(CanadaShapesFinalCount, is.na(CanadaShapesFinalCount), "0")
                                             
+                      ##----- Next Tab ------
+                      
+                      
+                      ## Calculate the number of seconds seen by Province and Shape Types
+                      
+                      ## Reformat Reported datetime to a date format 
+                      CanadaSightings$Reported <- format(CanadaSightings$Reported,format='%b %Y')
+                      
+                      ## Split Duration to find seconds, minutes, hours, unusable types
+                      CanadaSightings$DurationType <- ifelse(grepl("minute", CanadaSightings$Duration), "minutes", 
+                                                          ifelse(grepl("second", CanadaSightings$Duration), "seconds", 
+                                                                 ifelse(grepl("hour", CanadaSightings$Duration), "hours", "unusable")))
+                      
+                      ## find numeric value in the string for time calculation
+                      CanadaSightings$DurationAmount <- suppressWarnings(as.numeric(gsub(" .*$|.*-|.*~|.*>", "", CanadaSightings$Duration)))
+                      ## gsub filters 
+                      ## "-.*$" Finds number before the "-"
+                      ## ".*-" Finds number after the "-"
+                      ## " .*$" Finds before a space
+                      ## "|" is equal to an OR
+                      
+                      ## Replace the values NA with 0
+                      CanadaSightings <- replace(CanadaSightings, is.na(CanadaSightings), "0")
+                      
+                      ## Convert (seconds, minutes, hours) to seconds
+                      CanadaSightings$DurationSeconds <- ifelse(CanadaSightings$DurationType == "seconds", as.numeric(CanadaSightings$DurationAmount), 
+                                                        ifelse(CanadaSightings$DurationType == "minutes", as.numeric(CanadaSightings$DurationAmount) * 60, 
+                                                        ifelse(CanadaSightings$DurationType == "hours", as.numeric(CanadaSightings$DurationAmount) * 3600, 0)))                   
+                      
+                      ## Group the data and calculate the time summaries
+                      CanadaSightingsTime <- CanadaSightings %>% group_by(Reported, State, UFO_Shape) %>% 
+                              summarize(NumberSeen = length(UFO_Shape), 
+                                        DurationInSeconds = sum(DurationSeconds), 
+                                        DurationSecondsMin = min(DurationSeconds),
+                                        DurationSecondsMax = max(DurationSeconds), 
+                                        DurationSecondsMean = mean(DurationSeconds),
+                                        DurationSecondsMedian = median(DurationSeconds),
+                                        DurationSecondsStandardDeviation = sd(DurationSeconds)) 
+                      
+                      CanadaSightingsTimeFinal <- as.data.frame(CanadaSightingsTime)
+                      
+                      names(CanadaSightingsTimeFinal)[2] <- "Province"                 
+                      
                       ####################################################################################################
                       
                      
@@ -222,8 +271,51 @@ NURFORCreports <- function(YearMonth) {
                       OtherShapesFinalCount <- cast(OtherShapes, Reported + OtherLocation ~ Shape, value="NumberSeen") 
                       OtherShapesFinalCount <- replace(OtherShapesFinalCount, is.na(OtherShapesFinalCount), "0")
                       
-                      ####################################################################################################
+                      ##----- Next Tab ------
                       
+                      
+                      ## Calculate the number of seconds seen by Other Countries and Shape Types
+                      
+                      ## Reformat Reported datetime to a date format 
+                      OtherSightings$Reported <- format(OtherSightings$Reported,format='%b %Y')
+                      
+                      ## Split Duration to find seconds, minutes, hours, unusable types
+                      OtherSightings$DurationType <- ifelse(grepl("minute", OtherSightings$Duration), "minutes", 
+                                                          ifelse(grepl("second", OtherSightings$Duration), "seconds", 
+                                                                 ifelse(grepl("hour", OtherSightings$Duration), "hours", "unusable")))
+                      
+                      ## find numeric value in the string for time calculation
+                      OtherSightings$DurationAmount <- suppressWarnings(as.numeric(gsub(" .*$|.*-|.*~|.*>", "", OtherSightings$Duration)))
+                      ## gsub filters 
+                      ## "-.*$" Finds number before the "-"
+                      ## ".*-" Finds number after the "-"
+                      ## " .*$" Finds before a space
+                      ## "|" is equal to an OR
+                      
+                      ## Replace the values NA with 0
+                      OtherSightings <- replace(OtherSightings, is.na(OtherSightings), "0")
+                      
+                      ## Convert (seconds, minutes, hours) to seconds
+                      OtherSightings$DurationSeconds <- ifelse(OtherSightings$DurationType == "seconds", as.numeric(OtherSightings$DurationAmount), 
+                                                             ifelse(OtherSightings$DurationType == "minutes", as.numeric(OtherSightings$DurationAmount) * 60, 
+                                                                    ifelse(OtherSightings$DurationType == "hours", as.numeric(OtherSightings$DurationAmount) * 3600, 0)))
+                      
+                      
+                      ## Group the data and calculate the time summaries
+                      OtherSightingsTime <- OtherSightings %>% group_by(Reported, City, UFO_Shape) %>% 
+                              summarize(NumberSeen = length(UFO_Shape), 
+                                        DurationInSeconds = sum(DurationSeconds), 
+                                        DurationSecondsMin = min(DurationSeconds),
+                                        DurationSecondsMax = max(DurationSeconds), 
+                                        DurationSecondsMean = mean(DurationSeconds),
+                                        DurationSecondsMedian = median(DurationSeconds),
+                                        DurationSecondsStandardDeviation = sd(DurationSeconds)) 
+                      
+                      OtherSightingsTimeFinal <- as.data.frame(OtherSightingsTime)
+                      
+                      names(OtherSightingsTimeFinal)[2] <- "Location"
+                      
+                      ####################################################################################################
                       
                       
                       ## Output the Data to the Xcel Workbook
@@ -239,19 +331,29 @@ NURFORCreports <- function(YearMonth) {
                       addDataFrame(x=OtherShapesFinalCount, sheet=OtherShapeCount, row.names=FALSE)
                       
                       ## Add NURFORCtable data to the Seconds Seen worksheets
-                      ##addDataFrame(x=USASightingsTime, sheet=USALengthSeen, row.names=FALSE) <<-- THROWS ERROR SO FIX THIS!!!
+                      addDataFrame(x=USASightingsTimeFinal, sheet=USALengthSeen, row.names=FALSE) 
+                      addDataFrame(x=CanadaSightingsTimeFinal, sheet=CanadaLengthSeen, row.names=FALSE) 
+                      addDataFrame(x=OtherSightingsTimeFinal, sheet=OtherLengthSeen, row.names=FALSE) 
                       
                       
                       
                       ## Save the workbook to output folder (R Directory)
                       saveWorkbook(ufoWB, ufoWBname)
- 
+                      
+                      ## Save current workbook name to list
+                      WorkbookNames <- rbind(WorkbookNames, ufoWBname)
+                      
                 } ## End Loop
-head(USASightingsTime)
+
+#         OutputTabs <- c("USA NURFORC Raw Data", "Canada NURFORC Raw Data", "Other NURFORC Raw Data", "USA UFO Shapes Count", 
+#             "Canada UFO Shapes Count", "Other UFO Shapes Count", "USA UFO Shapes Seconds", "Canada UFO Shapes Seconds", 
+#             "Other UFO Shapes Seconds")
+#         
+#         FinishMessage <- paste("Created the following Excel worksheets:", OutputTabs, " ", "In the following Excel workbooks:", WorkbookNames[,1])
+#        FinishMessage   
+
 }
 
 
 ## Test the Function
 NURFORCreports(c("201407","201408")) 
-
-
